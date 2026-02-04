@@ -1,0 +1,10 @@
+img{
+  max-width: 100%;
+  height: auto;
+}
+
+.app-layout{
+  display: grid;
+  min-height: 100vh;
+  grid-template-rows: auto auto 1fr auto;
+}

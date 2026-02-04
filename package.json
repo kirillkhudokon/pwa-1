@@ -1,0 +1,21 @@
+{
+  "name": "pwa-exp-1-ts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "tsc -b"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "axios": "1.13.2",
+    "bootstrap": "^5.3.8",
+    "urlpattern-polyfill": "^10.1.0"
+  }
+}

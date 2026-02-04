@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pwa-exp-1-ts</title>
+  </head>
+  <body>
+    <div class="app-layout">
+      <div class="container py-2 border-bottom">
+        <div class="row">
+          <div class="col col-auto">
+            <div class="h3">Logo text</div>
+          </div>
+          <div class="col">
+            <div>Some text</div>
+          </div>
+        </div>
+      </div>
+      <nav>
+        <div class="container py-2 border-bottom">
+          <a href="/">Home</a> |
+          <a href="/posts">Posts</a> |
+          <a href="/auth/login">Login</a>
+        </div>
+      </nav>
+      <div>
+        <div class="container py-2">
+          <main id="app"></main>
+        </div>
+      </div>
+      <div>
+        <div class="container py-2 border-top">
+          <div class="row justify-content-between">
+            <div class="col col-auto">
+              Footer
+            </div>
+            <div class="col-auto">
+              <button class="appInstallBtn btn btn-primary d-none" type="button">Install as App</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
