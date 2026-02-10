@@ -4,7 +4,7 @@ import { api, connectDb } from "./src/container";
 
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_KEY = 'pwa-ai-adv-end-v-102';
+const CACHE_KEY = 'pwa-ai-adv-end-v-104';
 const EXTERNAL_API_PATH = import.meta.env.VITE_API_URL;
 const CACHE_SWR_ID_HEADER = 'X-SWR-ID';
 
@@ -55,6 +55,42 @@ self.addEventListener('sync', async (event) => {
 		event.waitUntil(syncFailedComments());
   }
 });
+
+self.addEventListener('periodicsync', async (event) => {
+  if (event.tag === 'posts-sync') {
+    event.waitUntil(syncPosts());
+  }
+});
+
+async function syncPosts() {
+	try {
+		const response = await api.posts.all();
+		
+		const cache = await caches.open(CACHE_KEY);
+		const postsUrl = new URL('/posts', EXTERNAL_API_PATH).toString();
+
+		const newResponse = new Response(JSON.stringify(response), {
+			headers: {
+				'Content-Type': 'application/json',
+				'Date': new Date().toUTCString()
+			}
+		});
+		
+		await cache.put(postsUrl, newResponse);
+		
+		const clients = await self.clients.matchAll();
+		for (const client of clients) {
+			client.postMessage({
+				type: 'posts-updated',
+				data: response
+			});
+		}
+		
+		console.log('Periodic sync: posts updated successfully');
+	} catch (error) {
+		console.error('Periodic sync failed:', error);
+	}
+}
 
 async function syncFailedComments(){
 	const db = await connectDb();
