@@ -1,5 +1,11 @@
-const CACHE_KEY = 'pwa-ai-adv-end-v-5';
-const EXTERNAL_API_PATH = 'http://localhost:3001';
+/// <reference lib="webworker" />
+
+import { api, connectDb } from "./src/container";
+
+declare const self: ServiceWorkerGlobalScope;
+
+const CACHE_KEY = 'pwa-ai-adv-end-v-102';
+const EXTERNAL_API_PATH = import.meta.env.VITE_API_URL;
 const CACHE_SWR_ID_HEADER = 'X-SWR-ID';
 
 const staticAssets = [
@@ -11,15 +17,19 @@ const staticAssets = [
 
 self.addEventListener('install', function(event){
 	self.skipWaiting();
-	// clients claim
 
 	event.waitUntil(
-		networkOnly('/.vite/manifest.json')
+		fetch('/.vite/manifest.json', { cache: 'no-store' })
 			.then(r => r.json())
-			.then(manifest => Object.values(manifest).map(val => [
+			.then(manifest => Object.values(manifest).map((val: any) => [
 				'/' + val.file,
-				...( val.css ?? [] ).map(cssVal => '/' + cssVal)
+				...( val.css ?? [] ).map((cssVal: any) => '/' + cssVal)
 			]).flat())
+			.then(manifestAssets => manifestAssets.filter(path => path !== '/sw.js'))
+			.then(manifestAssets => {
+				console.log(manifestAssets);
+				return manifestAssets;
+			})
 			.then(manifestAssets => [...new Set(manifestAssets)])
 			.catch(() => [])
 			.then(manifestAssets => 
@@ -29,15 +39,40 @@ self.addEventListener('install', function(event){
 	)
 });
 
-self.addEventListener('activate', function(){
-	caches.keys()
-		.then(keys => keys.filter(key => key !== CACHE_KEY))
-		.then(keys => keys.forEach(key => {
-			caches.delete(key);
-		}));
+self.addEventListener('activate', function(e){
+	e.waitUntil(
+		self.clients.claim()
+			.then(() => caches.keys()
+			.then(keys => keys.filter(key => key !== CACHE_KEY))
+			.then(keys => keys.forEach(key => {
+				caches.delete(key);
+			}))
+	));
 });
 
+self.addEventListener('sync', async (event) => {
+  if (event.tag === "comments-failed-store-retry") {
+		event.waitUntil(syncFailedComments());
+  }
+});
+
+async function syncFailedComments(){
+	const db = await connectDb();
+	const comments = await db.getAll('commentsFailedStores');
+
+	for(const comment of comments){
+		await api.comments.create(comment.item, comment.itemId, comment.body);
+		// clients post message like swr
+		await db.delete('commentsFailedStores', comment.key);
+		console.log(`sync comment ${comment.key}`)
+	}
+}
+
 self.addEventListener('fetch', function(event){
+	if(event.request.method !== 'GET'){
+		return;
+	}
+
 	// recom ignore: video etc, !http
 
 	if(event.request.url.startsWith(self.location.origin)) {
@@ -47,24 +82,23 @@ self.addEventListener('fetch', function(event){
 				css,js -> cacheFirst
 				img -> ... cacheTTLNetworkFallback
 			*/			
-
-			event.respondWith(cacheTTLNetworkFallback(event.request, 30 * 1000));
+			event.respondWith(cacheFirst(event.request));
 		}
 
 		return;
 	}
 
 	if(event.request.url.startsWith(EXTERNAL_API_PATH)) {
-		event.respondWith(cacheSwrWithMessage(event.request));
+		event.respondWith(networkFirst(event.request));
 		return;
 	}
 })
 
-async function networkOnly(request){
+export async function networkOnly(request: Request){
 	return await fetch(request, { cache: 'no-store' });
 }
 
-async function networkFirst(request){
+export async function networkFirst(request: Request){
 	try{
 		const networkResponse = await fetch(request);
 
@@ -83,7 +117,7 @@ async function networkFirst(request){
 	}
 }
 
-async function cacheFirst(request){
+export async function cacheFirst(request: Request){
 	try{
 		const cachedResponse = await caches.match(request, { cacheName: CACHE_KEY });
 
@@ -108,16 +142,16 @@ async function cacheFirst(request){
 	}
 }
 
-async function cacheFirstTTL(request, time){
+export async function cacheFirstTTL(request: Request, time: number){
 	try{
 		const cachedResponse = await caches.match(request, { cacheName: CACHE_KEY });
 		
 		if(cachedResponse){
-			const cachedAt = +(new Date(cachedResponse.headers.get('date')));
+			const cachedAt = +(new Date(cachedResponse.headers.get('date')!));
 			const expiredAt = cachedAt + time - Date.now();
 
 			if(expiredAt > 0){
-				console.log(`c1 from cache, exp in ${parseInt(expiredAt / 1000)}`, request.url)
+				console.log(`c1 from cache, exp in ${parseInt(`${expiredAt / 1000}`)}`, request.url)
 				return cachedResponse;
 			}
 		}
@@ -138,18 +172,18 @@ async function cacheFirstTTL(request, time){
 	}
 }
 
-async function cacheTTLNetworkFallback(request, time){
+export async function cacheTTLNetworkFallback(request: Request, time: number){
 	let cacheFallback;
 
 	try{
 		const cachedResponse = await caches.match(request, { cacheName: CACHE_KEY });
 		
 		if(cachedResponse){
-			const cachedAt = +(new Date(cachedResponse.headers.get('date')));
+			const cachedAt = +(new Date(cachedResponse.headers.get('date')!));
 			const expiredAt = cachedAt + time - Date.now();
 
 			if(expiredAt > 0){
-				console.log(`c1 from cache, exp in ${parseInt(expiredAt / 1000)}`, request.url)
+				console.log(`c1 from cache, exp in ${parseInt(`${expiredAt / 1000}`)}`, request.url)
 				return cachedResponse;
 			}
 			else{
@@ -182,12 +216,12 @@ async function cacheTTLNetworkFallback(request, time){
 	}
 }
 
-async function cacheSwrClassic(request){
+export async function cacheSwrClassic(request: Request){
 	try{
 		const cachedResponse = await caches.match(request, { cacheName: CACHE_KEY });
 		
 		if(cachedResponse){
-			runNetwork(request).then(resp => {
+			runNetwork(request).then(() => {
 				console.log('swr background upd', request.url)
 			}); // waitUntil, Nikita AI, need check
 			console.log('swr cache', request.url)
@@ -208,7 +242,7 @@ async function cacheSwrClassic(request){
 		1. use only for json or text
 		2. we have to provide custom header to 
 */
-async function cacheSwrWithMessage(request){
+export async function cacheSwrWithMessage(request: Request){
 	try{
 		const cachedResponse = await caches.match(request, { cacheName: CACHE_KEY });
 		
@@ -228,7 +262,7 @@ async function cacheSwrWithMessage(request){
 					}
 				})
 			}); 
-			// waitUntil, Nikita AI, need check
+
 			console.log('swr cache', request.url)
 			return cachedResponse;
 		}
@@ -242,7 +276,7 @@ async function cacheSwrWithMessage(request){
 	}
 }
 
-async function runNetwork(request){
+export async function runNetwork(request: Request){
 	const networkResponse = await fetch(request);
 
 	if(networkResponse.ok){

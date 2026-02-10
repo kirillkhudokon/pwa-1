@@ -9,23 +9,37 @@ import HomePage from "./pages/home";
 import PostPage from "./pages/post";
 import PostsPage from "./pages/posts";
 import AuthLoginPage from './pages/auth/login';
+import { initUser } from './container';
 
-const box = document.querySelector<HTMLDivElement>('#app')!;
+appInit();
 
-new Router(
-  box, 
-  [
-    { path: '/', component: HomePage },
-    { path: '/posts', component: PostsPage },
-    { path: '/posts/:id', component: PostPage },
-    { path: '/auth/login', component: AuthLoginPage }
-  ], 
-  Error404Page
-);
+async function appInit(){
+  console.log(navigator.storage.estimate())
+
+  await initUser();
+  const box = document.querySelector<HTMLDivElement>('#app')!;
+
+  new Router(
+    box, 
+    [
+      { path: '/', component: HomePage },
+      { path: '/posts', component: PostsPage },
+      { path: '/posts/:id', component: PostPage },
+      { path: '/auth/login', component: AuthLoginPage }
+    ], 
+    Error404Page
+  );
+
+  if(true){
+    pwaInit();
+  }
+}
 
 function pwaInit(){
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('/sw.js')
+    const swPath = import.meta.env.PROD ? '/sw.js' : '/sw.ts';
+
+    navigator.serviceWorker.register(swPath, { type: 'module' })
       .then(regisration => console.log('reg', regisration.scope))
       .catch(e => console.log('no worker', e))
   
@@ -64,5 +78,3 @@ function pwaInit(){
     }
   }
 }
-
-pwaInit();

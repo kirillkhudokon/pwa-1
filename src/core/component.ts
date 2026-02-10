@@ -25,10 +25,10 @@ export class Component{
 		this.el.innerHTML = '';
 	}
 
-	on(
+	on<T extends Element>(
 		eventname: string, 
 		selector: string, 
-		handler: (this: Element, e: Event) => void
+		handler: (this: T, e: Event) => void
 	){
 		return delegate(this.el, eventname, selector, handler);
 	}

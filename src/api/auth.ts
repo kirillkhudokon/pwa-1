@@ -5,7 +5,7 @@ import type { WithTimestamps } from "./types/general";
 export default function initAuthApi(http: AxiosInstance){
   return {
     async check(){
-      const response = await http.get<AuthResponse>('/auth/check', { params: { delay: 1 } })
+      const response = await http.get<AuthResponse>('/auth/check')
       return response.data;
     },
     async login(body: LoginBody){
@@ -15,23 +15,23 @@ export default function initAuthApi(http: AxiosInstance){
   }
 }
 
-type AuthCheckFailed = {
+export type AuthCheckFailed = {
   auth: false
 }
 
-type AuthCheckSuccess = {
+export type AuthCheckSuccess = {
   auth: true,
   user: User
 }
 
-type AuthResponse = AuthCheckFailed | AuthCheckSuccess
+export type AuthResponse = AuthCheckFailed | AuthCheckSuccess
 
-type LoginBody = {
+export type LoginBody = {
   login: string,
   password: string
 }
 
-type LoginResponse = {
+export type LoginResponse = {
   token: string,
   user: WithTimestamps<User>
 }
