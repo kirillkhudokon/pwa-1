@@ -40,12 +40,31 @@ function pwaInit(){
     const swPath = import.meta.env.PROD ? '/sw.js' : '/sw.ts';
 
     navigator.serviceWorker.register(swPath, { type: 'module' })
-      .then(regisration => console.log('reg', regisration.scope))
+      .then(async registration => {
+        console.log('reg', registration.scope);
+        
+        if ('periodicSync' in registration) {
+          try {
+            await registration.periodicSync?.register('posts-sync', {
+              minInterval: 5000
+            });
+            console.log('Periodic sync registered for posts');
+          } catch (error) {
+            console.log('Periodic sync registration failed:', error);
+          }
+        } else {
+          console.log('Periodic Background Sync is not supported');
+        }
+      })
       .catch(e => console.log('no worker', e))
   
     navigator.serviceWorker.addEventListener('message', ({ data }) => {
       if(data.type == 'swr-updated'){
         console.log(data)
+      }
+      if(data.type == 'posts-updated'){
+        console.log('Posts updated in background:', data.data);
+        window.dispatchEvent(new CustomEvent('posts-synced', { detail: data.data }));
       }
     })
   
