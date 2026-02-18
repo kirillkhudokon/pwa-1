@@ -37,7 +37,40 @@ async function appInit(){
 
 const swEventToEventBus = ["comments-failed-stored", "swr-updated"];
 
-function pwaInit(){
+async function pwaInit(){
+  const response = await fetch('http://localhost:3001/push/public-key');
+  const vapidPublicKey = await response.json();
+
+  const btnPush = document.querySelector('.pushPermissionBtn');
+  if(btnPush) {
+    btnPush.addEventListener('click', async function() {
+      if (!navigator.serviceWorker || !window.PushManager) {
+        console.log('Push notifications are not supported in this browser.');
+        return;
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          const registration = await navigator.serviceWorker.ready;
+          const subscribeOptions = {
+            userVisibleOnly: true,
+            applicationServerKey: vapidPublicKey.publicKey
+          };
+          const subscription = await registration.pushManager.subscribe(subscribeOptions);
+          await fetch('http://localhost:3001/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(subscription)
+          });
+          console.log('Push включены!');
+        } else {
+          console.log('Разрешение на push не получено.');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    });
+  }
   if('serviceWorker' in navigator){
     const swPath = import.meta.env.PROD ? '/sw.js' : '/sw.ts';
 
