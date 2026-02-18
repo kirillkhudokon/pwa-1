@@ -28,7 +28,7 @@ export const api = initApi(http);
 const { promise: dbPromise, resolve: dbResolve } = Promise.withResolvers<IDBPDatabase<IndexDB>>();
 let dbConnected = false;
 
-interface IndexDB extends DBSchema {
+export interface IndexDB extends DBSchema {
   auth: {
     key: 'token',
     value: string
@@ -46,7 +46,10 @@ interface IndexDB extends DBSchema {
       key: string,
       item: Commentables,
       itemId: number,
-      body: CommentCreateBody
+      body: CommentCreateBody,
+      user: User,
+      createdAt: string,
+      updatedAt: string
     }
   } 
 }
@@ -56,7 +59,7 @@ export function connectDb(){
     dbConnected = true;
     console.log('try connect to db')
 
-    openDB<IndexDB>('appDb', 13, {
+    openDB<IndexDB>('appDb', 15, {
       upgrade(db) {
         Array.from(db.objectStoreNames).forEach(name => {
           db.deleteObjectStore(name);
@@ -87,3 +90,18 @@ export async function initUser(){
   authUser = response.auth ? response.user : null;
 }
 
+class EventBus extends EventTarget{
+  
+}
+
+// ts 50-50
+export class DataEvent<T> extends Event{
+  data: T
+
+  constructor(type: string, data: T){
+    super(type);
+    this.data = data;
+  }
+}
+
+export const eventBus = new EventBus();

@@ -17,6 +17,7 @@
     "axios": "^1.13.4",
     "bootstrap": "^5.3.8",
     "idb": "^8.0.3",
+    "nanoid": "^5.1.6",
     "urlpattern-polyfill": "^10.1.0"
   }
 }

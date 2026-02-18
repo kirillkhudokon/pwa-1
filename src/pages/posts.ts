@@ -11,10 +11,6 @@ export default class PostsPage extends Component{
 
   async setup(): Promise<void> {
     api.posts.all().then(data => this.setState({ posts: data }))
-    
-    window.addEventListener('posts-synced', ((event: CustomEvent) => {
-      this.setState({ posts: event.detail });
-    }) as EventListener);
   }
 
   render() {

@@ -19,5 +19,6 @@ export default function initCommentsApi(http: AxiosInstance){
 }
 
 export type CommentCreateBody = {
-  text: string
+  text: string,
+  idk: string
 }

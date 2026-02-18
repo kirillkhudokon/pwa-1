@@ -1,10 +1,11 @@
 /// <reference lib="webworker" />
 
+import type { Comment } from "./src/api/types/comments";
 import { api, connectDb } from "./src/container";
 
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_KEY = 'pwa-ai-adv-end-v-104';
+const CACHE_KEY = 'pwa-l5-5';
 const EXTERNAL_API_PATH = import.meta.env.VITE_API_URL;
 const CACHE_SWR_ID_HEADER = 'X-SWR-ID';
 
@@ -56,8 +57,34 @@ self.addEventListener('sync', async (event) => {
   }
 });
 
+async function syncFailedComments(){
+	const db = await connectDb();
+	const comments = await db.getAll('commentsFailedStores');
+	const results: Comment[] = [];
+
+	for(const comment of comments){
+		const storedComment = await api.comments.create(comment.item, comment.itemId, comment.body);
+		// clients post message like swr
+		await db.delete('commentsFailedStores', comment.key);
+		await db.delete('commentsForm', `post.${comment.itemId}`);
+		console.log(`sync comment ${comment.body.idk}`)
+		results.push(storedComment);
+	}
+
+	if(results.length){
+		self.clients.matchAll().then(clients => {
+			for (const client of clients) {
+				client.postMessage({ 
+					type: "comments-failed-stored", 
+					data: results
+				});
+			}
+		})
+	}
+}
+
 self.addEventListener('periodicsync', async (event) => {
-  if (event.tag === 'posts-sync') {
+  if (event.tag === 'posts-latest-sync') {
     event.waitUntil(syncPosts());
   }
 });
@@ -65,7 +92,6 @@ self.addEventListener('periodicsync', async (event) => {
 async function syncPosts() {
 	try {
 		const response = await api.posts.all();
-		
 		const cache = await caches.open(CACHE_KEY);
 		const postsUrl = new URL('/posts', EXTERNAL_API_PATH).toString();
 
@@ -75,32 +101,11 @@ async function syncPosts() {
 				'Date': new Date().toUTCString()
 			}
 		});
-		
+
 		await cache.put(postsUrl, newResponse);
-		
-		const clients = await self.clients.matchAll();
-		for (const client of clients) {
-			client.postMessage({
-				type: 'posts-updated',
-				data: response
-			});
-		}
-		
 		console.log('Periodic sync: posts updated successfully');
 	} catch (error) {
 		console.error('Periodic sync failed:', error);
-	}
-}
-
-async function syncFailedComments(){
-	const db = await connectDb();
-	const comments = await db.getAll('commentsFailedStores');
-
-	for(const comment of comments){
-		await api.comments.create(comment.item, comment.itemId, comment.body);
-		// clients post message like swr
-		await db.delete('commentsFailedStores', comment.key);
-		console.log(`sync comment ${comment.key}`)
 	}
 }
 
@@ -118,7 +123,8 @@ self.addEventListener('fetch', function(event){
 				css,js -> cacheFirst
 				img -> ... cacheTTLNetworkFallback
 			*/			
-			event.respondWith(cacheFirst(event.request));
+			//event.respondWith(cacheFirst(event.request));
+			event.respondWith(networkFirst(event.request));
 		}
 
 		return;

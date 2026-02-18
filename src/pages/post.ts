@@ -2,9 +2,10 @@ import { AxiosError } from "axios";
 import type { CommentCreateBody } from "../api/comment";
 import type { PostOneResponse } from "../api/posts";
 import type { Comment } from "../api/types/comments";
-import { api, authUser, connectDb } from "../container";
+import { api, authUser, connectDb, DataEvent, eventBus, type IndexDB } from "../container";
 import { Component } from "../core/component";
 import { formToObject } from "../shared/forms";
+import { nanoid } from "nanoid";
 
 type PostState = {
   comments: Comment[],
@@ -16,7 +17,7 @@ type PostState = {
 export default class PostPage extends Component{
   state: PostState = {
     comments: [],
-    form: { text: '' },
+    form: { text: '', idk: nanoid(32) },
     errors: {},
     pending: false
   }
@@ -36,7 +37,13 @@ export default class PostPage extends Component{
     const cmp = this;
     const db = await connectDb();
     const post = this.post!;
-    this.state.comments = await api.comments.all('post', this.post.id).catch(() => []);
+
+    this.state.comments = [
+      ...(await db.getAll('commentsFailedStores'))
+        .map(failedItemToComment)
+        .filter(c => c.PostId == post.id),
+      ...(await api.comments.all('post', this.post.id).catch(() => []))
+    ]
     
     const record = await db.get('commentsForm', `post.${post.id}`);
 
@@ -47,7 +54,7 @@ export default class PostPage extends Component{
     this.on<HTMLTextAreaElement>('change', '.commentsForm [name=text]', function(){
       db.put('commentsForm', {
         itemKey: `post.${post.id}`,
-        body: { text: this.value }
+        body: { text: this.value, idk: cmp.state.form.idk }
       })
     })
 
@@ -63,7 +70,7 @@ export default class PostPage extends Component{
         cmp.setState({
           errors: {},
           pending: false,
-          form: { text: '' },
+          form: { text: '', idk: nanoid(32) },
           comments: await api.comments.all('post', post.id).catch(() => [])
         })
       }
@@ -76,16 +83,30 @@ export default class PostPage extends Component{
         }
         else{
           const swr = await navigator.serviceWorker.ready;
+          const now = (new Date()).toUTCString();
 
           if(swr.sync){
-            await db.put('commentsFailedStores', {
+            const failedItem: IndexDB['commentsFailedStores']['value'] = {
               key: Math.random() + '.' + Date.now(),
               item: 'post',
               itemId: post.id,
-              body: form
-            })
-            // swr reg event sync
-            cmp.setState({ errors: { text: 'Maybe you is offline, it is not problem, we send message later in background mode' }}); // ui not good
+              body: form,
+              user: authUser!,
+              createdAt: now,
+              updatedAt: now
+            }
+
+            await db.put('commentsFailedStores', failedItem)
+            
+            cmp.setState({ 
+              errors: {},
+              form: { text: '', idk: nanoid(32) },
+              pending: false,
+              comments: [
+                failedItemToComment(failedItem),
+                ...cmp.state.comments
+              ]
+            }); 
             
             swr.sync.register("comments-failed-store-retry");
           }
@@ -95,6 +116,21 @@ export default class PostPage extends Component{
           }
         }
       }
+    })
+
+    eventBus.addEventListener("comments-failed-stored", (e) => {
+      const { data } = (e as DataEvent<{ data: Comment[] }>).data;
+      
+      data.forEach(item => {
+        /* very bad array search -> comments Map<idk, Comment>*/
+        const idx = cmp.state.comments.findIndex(comment => item.idk == comment.idk);
+
+        if(idx > -1){
+          cmp.state.comments[idx] = item; // react shocked!
+        }
+      })
+
+      this.render();
     })
   }
 
@@ -110,6 +146,7 @@ export default class PostPage extends Component{
       </div>
       <hr>
       ${ authUser ? `<form class="commentsForm">
+        <input type="hidden" name="idk" value="${form.idk}" >
         <div class="mb-2">
           <label class="form-label">Your comment</label>
           <textarea name="text" class="form-control">${form.text}</textarea>
@@ -119,11 +156,33 @@ export default class PostPage extends Component{
       </form><hr>` : ''}
       <div>
         ${ comments.map(item => `<div class="alert alert-success">
-          <strong>${ item.User.login }</strong>
+          <div class="d-flex justify-content-between">
+            <div>
+              <strong>${ item.User.login }</strong> /
+              <em>${ (new Date(item.createdAt)).toLocaleString() }</em>
+            </div>
+            ${ item.id == 0 ? `<div class="text-danger">
+              (!) - sync
+            </div>` : '' }
+          </div>
           <hr/>
           ${ item.text }
         </div>`).join('') }
       </div>
     </div>` : '404'}`;
+  }
+}
+
+function failedItemToComment(item: IndexDB['commentsFailedStores']['value']) : Comment{
+  return {
+    id: 0,
+    UserId: item.user.id,
+    User: item.user,
+    text: item.body.text,
+    idk: item.body.idk,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    PostId: item.itemId,
+    ImageId: null
   }
 }

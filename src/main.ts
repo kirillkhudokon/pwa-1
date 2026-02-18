@@ -9,7 +9,7 @@ import HomePage from "./pages/home";
 import PostPage from "./pages/post";
 import PostsPage from "./pages/posts";
 import AuthLoginPage from './pages/auth/login';
-import { initUser } from './container';
+import { DataEvent, eventBus, initUser } from './container';
 
 appInit();
 
@@ -35,6 +35,8 @@ async function appInit(){
   }
 }
 
+const swEventToEventBus = ["comments-failed-stored", "swr-updated"];
+
 function pwaInit(){
   if('serviceWorker' in navigator){
     const swPath = import.meta.env.PROD ? '/sw.js' : '/sw.ts';
@@ -42,29 +44,30 @@ function pwaInit(){
     navigator.serviceWorker.register(swPath, { type: 'module' })
       .then(async registration => {
         console.log('reg', registration.scope);
-        
-        if ('periodicSync' in registration) {
-          try {
-            await registration.periodicSync?.register('posts-sync', {
-              minInterval: 5000
-            });
-            console.log('Periodic sync registered for posts');
-          } catch (error) {
-            console.log('Periodic sync registration failed:', error);
+
+        if(registration.periodicSync){
+          const status = await navigator.permissions.query({ name: 'periodic-background-sync' as PermissionName });
+          
+          if (status.state === 'granted') {
+            try {
+              await registration.periodicSync.register('posts-latest-sync', {
+                minInterval: 1000 * 60 * 5, // cant test it in real
+              });
+              
+              console.log('Periodic background sync registered!');
+            } catch (err) {
+              console.error('Periodic background sync registration failed:', err);
+            }
+          } else {
+            console.log('Permission not granted for periodic background sync. Try to install website as an application!');
           }
-        } else {
-          console.log('Periodic Background Sync is not supported');
         }
       })
       .catch(e => console.log('no worker', e))
   
     navigator.serviceWorker.addEventListener('message', ({ data }) => {
-      if(data.type == 'swr-updated'){
-        console.log(data)
-      }
-      if(data.type == 'posts-updated'){
-        console.log('Posts updated in background:', data.data);
-        window.dispatchEvent(new CustomEvent('posts-synced', { detail: data.data }));
+      if(swEventToEventBus.includes(data.type)){
+        eventBus.dispatchEvent(new DataEvent(data.type, data))
       }
     })
   
