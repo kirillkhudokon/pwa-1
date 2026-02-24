@@ -9,7 +9,7 @@ import HomePage from "./pages/home";
 import PostPage from "./pages/post";
 import PostsPage from "./pages/posts";
 import AuthLoginPage from './pages/auth/login';
-import { DataEvent, eventBus, initUser } from './container';
+import { api, DataEvent, eventBus, initUser } from './container';
 
 appInit();
 
@@ -30,17 +30,13 @@ async function appInit(){
     Error404Page
   );
 
-  if(true){
-    pwaInit();
-  }
+  await pwaInit()
 }
 
 const swEventToEventBus = ["comments-failed-stored", "swr-updated"];
 
 async function pwaInit(){
-  const response = await fetch('http://localhost:3001/push/public-key');
-  const vapidPublicKey = await response.json();
-
+  const vapidPublicKey = await api.push.publicKey();
   const btnPush = document.querySelector('.pushPermissionBtn');
   if(btnPush) {
     btnPush.addEventListener('click', async function() {
@@ -57,11 +53,7 @@ async function pwaInit(){
             applicationServerKey: vapidPublicKey.publicKey
           };
           const subscription = await registration.pushManager.subscribe(subscribeOptions);
-          await fetch('http://localhost:3001/push/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(subscription)
-          });
+          await api.push.subscribe(subscription);
           console.log('Push включены!');
         } else {
           console.log('Разрешение на push не получено.');

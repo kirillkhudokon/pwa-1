@@ -5,7 +5,7 @@ import { api, connectDb } from "./src/container";
 
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_KEY = 'pwa-l5-67';
+const CACHE_KEY = 'pwa-l5-23';
 const EXTERNAL_API_PATH = import.meta.env.VITE_API_URL;
 const CACHE_SWR_ID_HEADER = 'X-SWR-ID';
 
@@ -137,14 +137,10 @@ self.addEventListener('fetch', function(event){
 })
 
 self.addEventListener('push', function(event) {
-	const data: any = event.data?.json()
-	console.log('push', data)
-	const title = data.title || 'Новый комментарий';
-	const options: NotificationOptions = {
-		body: data.body || '',
-	};
+	const data: NotificationOptions & { title: string } = event.data?.json()
+	const { title, ...options } = data;
 	event.waitUntil(
-		self.registration.showNotification(title, options)
+		self.registration.showNotification(data.title, options)
 	);
 });
 
