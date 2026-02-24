@@ -3,18 +3,21 @@ import initAuthApi from "./auth";
 import initPostsApi from "./posts";
 import initImagesApi from "./images";
 import initCommentsApi from "./comment";
+import initPushApi from "./push";
 
 export default function initApi(http: AxiosInstance){
   const auth = initAuthApi(http);
   const posts = initPostsApi(http);
   const images = initImagesApi(http);
   const comments = initCommentsApi(http);
+  const push = initPushApi(http);
 
   return {
     auth,
     posts,
     images,
-    comments
+    comments,
+    push
   }
 }
 

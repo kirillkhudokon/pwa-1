@@ -5,7 +5,7 @@ import { api, connectDb } from "./src/container";
 
 declare const self: ServiceWorkerGlobalScope;
 
-const CACHE_KEY = 'pwa-l5-5';
+const CACHE_KEY = 'pwa-l5-234';
 const EXTERNAL_API_PATH = import.meta.env.VITE_API_URL;
 const CACHE_SWR_ID_HEADER = 'X-SWR-ID';
 
@@ -135,6 +135,45 @@ self.addEventListener('fetch', function(event){
 		return;
 	}
 })
+
+self.addEventListener('push', function(event) {
+	const data: NotificationOptions & { title: string } = event.data?.json()
+	const { title, ...options } = data;
+	event.waitUntil(
+		self.registration.showNotification(data.title, options)
+	);
+});
+
+self.addEventListener('pushsubscriptionchange', function(event) {
+	event.waitUntil(syncPushSubscriptionChange(event));
+});
+
+async function syncPushSubscriptionChange(event: PushSubscriptionChangeEvent){
+	try {
+		if(event.oldSubscription){
+			await api.push.unsubscribe({ endpoint: event.oldSubscription.endpoint })
+		}
+
+		if(event.newSubscription){
+			await api.push.subscribe(event.newSubscription);
+			return;
+		}
+
+		const vapidPublicKey = await api.push.publicKey();
+		const subscription = await self.registration.pushManager.subscribe({
+			userVisibleOnly: true,
+			applicationServerKey: vapidPublicKey.publicKey
+		});
+
+		await api.push.subscribe(subscription);
+	} catch (error) {
+		console.error('pushsubscriptionchange failed:', error);
+	}
+}
+
+self.addEventListener('notificationclick', function(event) {
+	event.notification.close();
+});
 
 export async function networkOnly(request: Request){
 	return await fetch(request, { cache: 'no-store' });

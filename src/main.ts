@@ -9,7 +9,7 @@ import HomePage from "./pages/home";
 import PostPage from "./pages/post";
 import PostsPage from "./pages/posts";
 import AuthLoginPage from './pages/auth/login';
-import { DataEvent, eventBus, initUser } from './container';
+import { api, authUser, DataEvent, eventBus, initUser } from './container';
 
 appInit();
 
@@ -30,20 +30,96 @@ async function appInit(){
     Error404Page
   );
 
-  if(true){
-    pwaInit();
-  }
+  await pwaInit()
 }
 
 const swEventToEventBus = ["comments-failed-stored", "swr-updated"];
 
-function pwaInit(){
+async function pwaInit(){
+  const btnPush = document.querySelector<HTMLButtonElement>('.pushPermissionBtn');
+  const btnPushUnsubscribe = document.querySelector<HTMLButtonElement>('.pushUnsubscribeBtn');
+
+  const syncPushButtons = async function(){
+    if(!btnPush && !btnPushUnsubscribe){
+      return;
+    }
+
+    if(!authUser || !('serviceWorker' in navigator) || !window.PushManager){
+      btnPush?.classList.add('d-none');
+      btnPushUnsubscribe?.classList.add('d-none');
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    btnPush?.classList.toggle('d-none', !!subscription);
+    btnPushUnsubscribe?.classList.toggle('d-none', !subscription);
+  }
+
+  if(btnPush) {
+    btnPush.addEventListener('click', async function() {
+      if (!navigator.serviceWorker || !window.PushManager) {
+        console.log('Push notifications are not supported in this browser.');
+        return;
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          const registration = await navigator.serviceWorker.ready;
+          const vapidPublicKey = await api.push.publicKey();
+          const subscribeOptions = {
+            userVisibleOnly: true,
+            applicationServerKey: vapidPublicKey.publicKey
+          };
+          const subscription = await registration.pushManager.subscribe(subscribeOptions);
+          await api.push.subscribe(subscription);
+          console.log('Push включены!');
+          await syncPushButtons();
+        } else {
+          console.log('Разрешение на push не получено.');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    });
+  }
+
+  if(btnPushUnsubscribe){
+    btnPushUnsubscribe.addEventListener('click', async function(){
+      if (!navigator.serviceWorker || !window.PushManager) {
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if(!subscription){
+          await syncPushButtons();
+          return;
+        }
+
+        await api.push.unsubscribe({ endpoint: subscription.endpoint });
+
+        await subscription.unsubscribe();
+        console.log('Push отключены!');
+        await syncPushButtons();
+      } catch (err) {
+        console.log(err);
+      }
+    })
+  }
+
+  await syncPushButtons();
+
   if('serviceWorker' in navigator){
     const swPath = import.meta.env.PROD ? '/sw.js' : '/sw.ts';
 
     navigator.serviceWorker.register(swPath, { type: 'module' })
       .then(async registration => {
         console.log('reg', registration.scope);
+        await syncPushButtons();
 
         if(registration.periodicSync){
           const status = await navigator.permissions.query({ name: 'periodic-background-sync' as PermissionName });
